@@ -3,7 +3,7 @@ import { property, state } from "lit/decorators.js";
 import type { PhoneLoggerCardConfig, CallItem, CallsResponse, AddonInfo } from "./types.js";
 import { t, statusLabel } from "./i18n.js";
 
-const CARD_VERSION = "1.0.2";
+const CARD_VERSION = "1.0.3";
 const DEFAULT_ADDON_SLUG = "72a005f5-phone-logger";
 const DEFAULT_LIMIT = 20;
 
