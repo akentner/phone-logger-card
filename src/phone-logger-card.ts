@@ -141,6 +141,15 @@ class PhoneLoggerCard extends LitElement {
   private async _resolveIngressUrl(): Promise<string> {
     if (this._ingressUrl) return this._ingressUrl;
 
+    // Priority 1: direct ingress_token in config
+    if (this._config?.ingress_token) {
+      const token = this._config.ingress_token.trim();
+      const base = `/api/hassio_ingress/${token}/`;
+      this._ingressUrl = base;
+      return base;
+    }
+
+    // Priority 2: discover via Supervisor API using addon_slug
     const slug = this._config?.addon_slug ?? DEFAULT_ADDON_SLUG;
     const info = await this.hass!.callApi<AddonInfo>("GET", `hassio/addons/${slug}/info`);
     // ingress_url is e.g. "/api/hassio_ingress/TOKEN/" — ensure trailing slash
@@ -175,8 +184,11 @@ class PhoneLoggerCard extends LitElement {
       this._nextCursor = data.next_cursor ?? null;
     } catch (e) {
       this._error = e instanceof Error ? e.message : String(e);
-      // Reset ingress URL cache on error so it gets re-discovered next time
-      this._ingressUrl = null;
+      // Only reset ingress URL cache if it was discovered via API (not manually configured)
+      // This prevents an infinite retry loop when the Supervisor API is unreachable
+      if (!this._config?.ingress_token) {
+        this._ingressUrl = null;
+      }
     } finally {
       this._loading = false;
       this._loadingMore = false;
