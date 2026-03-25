@@ -98,6 +98,10 @@ class PhoneLoggerCard extends LitElement {
 
   private _ingressUrl: string | null = null;
   private _pollTimer?: ReturnType<typeof setInterval>;
+  private _failCount = 0;
+  private _circuitOpenUntil = 0;
+  private static readonly CIRCUIT_MAX_FAILURES = 3;
+  private static readonly CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
   static getStubConfig(): PhoneLoggerCardConfig {
     return {};
@@ -161,6 +165,9 @@ class PhoneLoggerCard extends LitElement {
   private async _fetchCalls(cursor?: string) {
     if (!this.hass) return;
 
+    // Circuit breaker: stop retrying after repeated failures
+    if (Date.now() < this._circuitOpenUntil) return;
+
     const appending = Boolean(cursor);
     if (appending) {
       this._loadingMore = true;
@@ -182,10 +189,17 @@ class PhoneLoggerCard extends LitElement {
 
       this._calls = appending ? [...this._calls, ...(data.items ?? [])] : (data.items ?? []);
       this._nextCursor = data.next_cursor ?? null;
+      this._failCount = 0;
     } catch (e) {
-      this._error = e instanceof Error ? e.message : String(e);
+      this._failCount++;
+      if (this._failCount >= PhoneLoggerCard.CIRCUIT_MAX_FAILURES) {
+        this._circuitOpenUntil = Date.now() + PhoneLoggerCard.CIRCUIT_COOLDOWN_MS;
+        this._error = `${e instanceof Error ? e.message : String(e)} — retrying in 5 min`;
+        this._failCount = 0;
+      } else {
+        this._error = e instanceof Error ? e.message : String(e);
+      }
       // Only reset ingress URL cache if it was discovered via API (not manually configured)
-      // This prevents an infinite retry loop when the Supervisor API is unreachable
       if (!this._config?.ingress_token) {
         this._ingressUrl = null;
       }
