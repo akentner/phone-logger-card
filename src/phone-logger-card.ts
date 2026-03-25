@@ -1,10 +1,17 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
-import type { PhoneLoggerCardConfig, CallItem, CallsResponse } from "./types.js";
+import type { PhoneLoggerCardConfig, CallItem, CallsResponse, AddonInfo } from "./types.js";
 
 const CARD_VERSION = "1.0.0";
+const DEFAULT_ADDON_SLUG = "72a005f5-phone-logger";
+const DEFAULT_LIMIT = 20;
 
-// MDI icons inline as SVG paths (subset used by this card)
+// Minimal hass interface — only what this card uses
+interface Hass {
+  callApi<T>(method: "GET" | "POST", path: string): Promise<T>;
+}
+
+// MDI icons as inline SVG paths
 const MDI_PATHS: Record<string, string> = {
   "mdi:phone-incoming":
     "M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8M21 6h-3V3h-2v3h-3v2h3v3h2V8h3V6z",
@@ -54,16 +61,21 @@ function dayKey(date: Date): string {
 }
 
 function relativeDay(date: Date, now: Date): string {
-  const today = dayKey(now);
+  const todayKey = dayKey(now);
   const key = dayKey(date);
-  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const itemDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.round((todayDate.getTime() - itemDate.getTime()) / 86400000);
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const itemMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((todayMidnight.getTime() - itemMidnight.getTime()) / 86_400_000);
 
-  if (key === today) return "Heute";
-  if (diffDays === 1) return "Gestern";
-  if (diffDays === 2) return "Vorgestern";
-  return date.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+  if (key === todayKey) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays === 2) return "2 days ago";
+  return date.toLocaleDateString(navigator.language, {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 }
 
 function mdiIcon(name: string, color: string) {
@@ -76,64 +88,117 @@ function mdiIcon(name: string, color: string) {
 }
 
 class PhoneLoggerCard extends LitElement {
-  @property({ attribute: false }) public hass: object = {};
+  @property({ attribute: false }) public hass?: Hass;
   @state() private _config?: PhoneLoggerCardConfig;
   @state() private _calls: CallItem[] = [];
+  @state() private _nextCursor: string | null = null;
   @state() private _loading = false;
+  @state() private _loadingMore = false;
   @state() private _error: string | null = null;
 
+  private _ingressUrl: string | null = null;
   private _pollTimer?: ReturnType<typeof setInterval>;
 
-  static getConfigElement() {
-    return document.createElement("phone-logger-card-editor");
-  }
-
-  static getStubConfig() {
-    return { url: "" };
+  static getStubConfig(): PhoneLoggerCardConfig {
+    return {};
   }
 
   setConfig(config: PhoneLoggerCardConfig) {
-    if (!config.url) throw new Error("url ist erforderlich");
     this._config = config;
+    // Reset ingress URL if slug changed
+    this._ingressUrl = null;
   }
 
   connectedCallback() {
     super.connectedCallback();
-    this._fetchCalls();
-    this._pollTimer = setInterval(() => this._fetchCalls(), 60_000);
+    this._startPolling();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    if (this._pollTimer) clearInterval(this._pollTimer);
+    this._stopPolling();
   }
 
-  private async _fetchCalls() {
-    if (!this._config?.url) return;
-    this._loading = true;
-    this._error = null;
+  // Trigger initial fetch once hass becomes available
+  updated(changed: Map<string, unknown>) {
+    if (changed.has("hass") && this.hass && this._calls.length === 0 && !this._loading) {
+      this._fetchCalls();
+    }
+  }
+
+  private _startPolling() {
+    this._stopPolling();
+    this._pollTimer = setInterval(() => this._fetchCalls(), 60_000);
+  }
+
+  private _stopPolling() {
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer);
+      this._pollTimer = undefined;
+    }
+  }
+
+  private async _resolveIngressUrl(): Promise<string> {
+    if (this._ingressUrl) return this._ingressUrl;
+
+    const slug = this._config?.addon_slug ?? DEFAULT_ADDON_SLUG;
+    const info = await this.hass!.callApi<AddonInfo>("GET", `hassio/addons/${slug}/info`);
+    // ingress_url is e.g. "/api/hassio_ingress/TOKEN/" — ensure trailing slash
+    const base = info.ingress_url.endsWith("/") ? info.ingress_url : `${info.ingress_url}/`;
+    this._ingressUrl = base;
+    return base;
+  }
+
+  private async _fetchCalls(cursor?: string) {
+    if (!this.hass) return;
+
+    const appending = Boolean(cursor);
+    if (appending) {
+      this._loadingMore = true;
+    } else {
+      this._loading = true;
+      this._error = null;
+    }
+
     try {
-      const res = await fetch(this._config.url);
+      const base = await this._resolveIngressUrl();
+      const limit = this._config?.limit ?? DEFAULT_LIMIT;
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (cursor) params.set("cursor", cursor);
+
+      const res = await fetch(`${base}api/calls?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const data: CallsResponse = await res.json();
-      this._calls = data.items ?? [];
+
+      this._calls = appending ? [...this._calls, ...(data.items ?? [])] : (data.items ?? []);
+      this._nextCursor = data.next_cursor ?? null;
     } catch (e) {
       this._error = e instanceof Error ? e.message : String(e);
+      // Reset ingress URL cache on error so it gets re-discovered next time
+      this._ingressUrl = null;
     } finally {
       this._loading = false;
+      this._loadingMore = false;
     }
+  }
+
+  private _loadMore() {
+    if (this._nextCursor) this._fetchCalls(this._nextCursor);
   }
 
   private _groupedCalls(): Array<{ day: string; calls: CallItem[] }> {
     const now = new Date();
     const groups = new Map<string, CallItem[]>();
+
     for (const call of this._calls) {
       const date = new Date(call.started_at);
       const key = dayKey(date);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(call);
     }
-    return Array.from(groups.entries()).map(([_key, calls]) => ({
+
+    return Array.from(groups.entries()).map(([, calls]) => ({
       day: relativeDay(new Date(calls[0].started_at), now),
       calls,
     }));
@@ -142,27 +207,38 @@ class PhoneLoggerCard extends LitElement {
   protected render() {
     if (!this._config) return nothing;
 
-    const title = this._config.title ?? "Anrufliste";
+    const title = this._config.title ?? "Call Log";
     const grouped = this._groupedCalls();
 
     return html`
       <ha-card>
         <div class="card-header">${title}</div>
         <div class="card-content">
-          ${this._loading && this._calls.length === 0
-            ? html`<div class="status">Lade…</div>`
+          ${this._loading
+            ? html`<div class="status">Loading…</div>`
             : this._error
-            ? html`<div class="status error">${this._error}</div>`
-            : grouped.length === 0
-            ? html`<div class="status">Keine Anrufe</div>`
-            : grouped.map(
-                (group) => html`
-                  <div class="day-header">${group.day}</div>
-                  <table>
-                    ${group.calls.map((call) => this._renderRow(call))}
-                  </table>
-                `
-              )}
+              ? html`<div class="status error">${this._error}</div>`
+              : grouped.length === 0
+                ? html`<div class="status">No calls</div>`
+                : html`
+                    ${grouped.map(
+                      (group) => html`
+                        <div class="day-header">${group.day}</div>
+                        <table>
+                          ${group.calls.map((call) => this._renderRow(call))}
+                        </table>
+                      `
+                    )}
+                    ${this._nextCursor
+                      ? html`
+                          <div class="load-more">
+                            <button @click=${this._loadMore} ?disabled=${this._loadingMore}>
+                              ${this._loadingMore ? "Loading…" : "Load more"}
+                            </button>
+                          </div>
+                        `
+                      : nothing}
+                  `}
         </div>
       </ha-card>
     `;
@@ -173,7 +249,7 @@ class PhoneLoggerCard extends LitElement {
     const displayName =
       call.direction === "inbound" ? call.caller_display : call.called_display;
     const device = call.caller_device?.name ?? null;
-    const time = new Date(call.started_at).toLocaleTimeString("de-DE", {
+    const time = new Date(call.started_at).toLocaleTimeString(navigator.language, {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -227,7 +303,7 @@ class PhoneLoggerCard extends LitElement {
       border-collapse: collapse;
     }
     tr {
-      border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.08));
+      border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
     }
     tr:last-child {
       border-bottom: none;
@@ -241,7 +317,6 @@ class PhoneLoggerCard extends LitElement {
       padding-right: 8px;
     }
     .name-cell {
-      flex: 1;
       display: flex;
       flex-direction: column;
     }
@@ -260,6 +335,27 @@ class PhoneLoggerCard extends LitElement {
       white-space: nowrap;
       padding-left: 8px;
     }
+    .load-more {
+      display: flex;
+      justify-content: center;
+      padding-top: 12px;
+    }
+    .load-more button {
+      background: none;
+      border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
+      border-radius: 4px;
+      color: var(--primary-color);
+      cursor: pointer;
+      font-size: 0.85em;
+      padding: 6px 16px;
+    }
+    .load-more button:disabled {
+      color: var(--secondary-text-color);
+      cursor: default;
+    }
+    .load-more button:hover:not(:disabled) {
+      background: var(--secondary-background-color);
+    }
   `;
 }
 
@@ -273,7 +369,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: "phone-logger-card",
   name: "Phone Logger Card",
-  description: "Zeigt Anruflisten aus einem REST-Endpunkt",
+  description: "Displays phone call history from a REST endpoint",
   preview: false,
   documentationURL: "https://github.com/akentner/phone-logger-card",
 });
