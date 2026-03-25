@@ -1,6 +1,7 @@
 export interface PhoneLoggerCardConfig {
   ingress_token?: string;
   addon_slug?: string;
+  msn?: string | string[];
   limit?: number;
   title?: string;
 }

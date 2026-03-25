@@ -5,7 +5,8 @@
   "main": "dist/phone-logger-card.js",
   "scripts": {
     "build": "rollup -c rollup.config.mjs",
-    "watch": "rollup -c rollup.config.mjs --watch"
+    "watch": "rollup -c rollup.config.mjs --watch",
+    "deploy": "rollup -c rollup.config.mjs && scp dist/phone-logger-card.js haos-op3050-1:/config/www/community/phone-logger-card/phone-logger-card.js"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.3.0",

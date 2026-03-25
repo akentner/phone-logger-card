@@ -1,12 +1,12 @@
 import { LitElement, html, css, nothing } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { PhoneLoggerCardConfig, CallItem, CallsResponse, AddonInfo } from "./types.js";
+import { t, statusLabel } from "./i18n.js";
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.0.2";
 const DEFAULT_ADDON_SLUG = "72a005f5-phone-logger";
 const DEFAULT_LIMIT = 20;
 
-// Minimal hass interface — only what this card uses
 interface Hass {
   callApi<T>(method: "GET" | "POST", path: string): Promise<T>;
 }
@@ -23,6 +23,8 @@ const MDI_PATHS: Record<string, string> = {
     "M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8M22 3H14a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1l2 2 2-2h3a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z",
   "mdi:phone-hangup":
     "M12 9c-1.6 0-3.1.3-4.5.7v3.1c0 .4-.2.7-.5.9-1 .5-1.8 1.1-2.6 1.9-.2.2-.4.3-.7.3-.3 0-.5-.1-.7-.3L.8 13.4c-.2-.2-.3-.4-.3-.7 0-.3.1-.5.3-.7C3.3 9.4 7.5 8 12 8s8.7 1.4 11.2 4c.2.2.3.4.3.7 0 .3-.1.5-.3.7l-2.2 2.2c-.2.2-.4.3-.7.3-.3 0-.5-.1-.7-.3-.8-.8-1.7-1.4-2.6-1.9-.3-.2-.5-.5-.5-.9V9.7C15.1 9.3 13.6 9 12 9z",
+  "mdi:close":
+    "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
 };
 
 interface StatusStyle {
@@ -36,15 +38,9 @@ function getStatusStyle(status: string, direction: string): StatusStyle {
       ? { icon: "mdi:phone-incoming", color: "#3092dc" }
       : { icon: "mdi:phone-outgoing", color: "#8bbf68" };
   }
-  if (status === "missed") {
-    return { icon: "mdi:phone-remove", color: "#e45f3b" };
-  }
-  if (status === "not_reached") {
-    return { icon: "mdi:phone-remove", color: "#8bbf68" };
-  }
-  if (status === "voicemail") {
-    return { icon: "mdi:phone-message", color: "#e45f3b" };
-  }
+  if (status === "missed") return { icon: "mdi:phone-remove", color: "#e45f3b" };
+  if (status === "not_reached") return { icon: "mdi:phone-remove", color: "#8bbf68" };
+  if (status === "voicemail") return { icon: "mdi:phone-message", color: "#e45f3b" };
   return { icon: "mdi:phone-hangup", color: "var(--secondary-text-color, grey)" };
 }
 
@@ -54,6 +50,14 @@ function formatDuration(seconds: number): string {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function formatTimestamp(iso: string | null): string {
+  if (!iso) return "–";
+  return new Date(iso).toLocaleString(navigator.language, {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
 }
 
 function dayKey(date: Date): string {
@@ -67,21 +71,19 @@ function relativeDay(date: Date, now: Date): string {
   const itemMidnight = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffDays = Math.round((todayMidnight.getTime() - itemMidnight.getTime()) / 86_400_000);
 
-  if (key === todayKey) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays === 2) return "2 days ago";
+  if (key === todayKey) return t("today");
+  if (diffDays === 1) return t("yesterday");
+  if (diffDays === 2) return t("two_days_ago");
   return date.toLocaleDateString(navigator.language, {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+    weekday: "short", day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
 
-function mdiIcon(name: string, color: string) {
+function mdiIcon(name: string, color: string, title?: string) {
   const path = MDI_PATHS[name] ?? MDI_PATHS["mdi:phone-hangup"];
   return html`
-    <svg viewBox="0 0 24 24" width="22" height="22" style="fill:${color};flex-shrink:0">
+    <svg viewBox="0 0 24 24" width="22" height="22" style="fill:${color};flex-shrink:0" role="img">
+      ${title ? html`<title>${title}</title>` : nothing}
       <path d="${path}" />
     </svg>
   `;
@@ -95,13 +97,14 @@ class PhoneLoggerCard extends LitElement {
   @state() private _loading = false;
   @state() private _loadingMore = false;
   @state() private _error: string | null = null;
+  @state() private _selectedCall: CallItem | null = null;
 
   private _ingressUrl: string | null = null;
   private _pollTimer?: ReturnType<typeof setInterval>;
   private _failCount = 0;
   private _circuitOpenUntil = 0;
   private static readonly CIRCUIT_MAX_FAILURES = 3;
-  private static readonly CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+  private static readonly CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000;
 
   static getStubConfig(): PhoneLoggerCardConfig {
     return {};
@@ -109,7 +112,6 @@ class PhoneLoggerCard extends LitElement {
 
   setConfig(config: PhoneLoggerCardConfig) {
     this._config = config;
-    // Reset ingress URL if slug changed
     this._ingressUrl = null;
   }
 
@@ -123,7 +125,6 @@ class PhoneLoggerCard extends LitElement {
     this._stopPolling();
   }
 
-  // Trigger initial fetch once hass becomes available
   updated(changed: Map<string, unknown>) {
     if (changed.has("hass") && this.hass && this._calls.length === 0 && !this._loading) {
       this._fetchCalls();
@@ -145,18 +146,14 @@ class PhoneLoggerCard extends LitElement {
   private async _resolveIngressUrl(): Promise<string> {
     if (this._ingressUrl) return this._ingressUrl;
 
-    // Priority 1: direct ingress_token in config
     if (this._config?.ingress_token) {
       const token = this._config.ingress_token.trim();
-      const base = `/api/hassio_ingress/${token}/`;
-      this._ingressUrl = base;
-      return base;
+      this._ingressUrl = `/api/hassio_ingress/${token}/`;
+      return this._ingressUrl;
     }
 
-    // Priority 2: discover via Supervisor API using addon_slug
     const slug = this._config?.addon_slug ?? DEFAULT_ADDON_SLUG;
     const info = await this.hass!.callApi<AddonInfo>("GET", `hassio/addons/${slug}/info`);
-    // ingress_url is e.g. "/api/hassio_ingress/TOKEN/" — ensure trailing slash
     const base = info.ingress_url.endsWith("/") ? info.ingress_url : `${info.ingress_url}/`;
     this._ingressUrl = base;
     return base;
@@ -164,8 +161,6 @@ class PhoneLoggerCard extends LitElement {
 
   private async _fetchCalls(cursor?: string) {
     if (!this.hass) return;
-
-    // Circuit breaker: stop retrying after repeated failures
     if (Date.now() < this._circuitOpenUntil) return;
 
     const appending = Boolean(cursor);
@@ -182,24 +177,29 @@ class PhoneLoggerCard extends LitElement {
       const params = new URLSearchParams({ limit: String(limit) });
       if (cursor) params.set("cursor", cursor);
 
+      // MSN filter — API supports multiple msn params
+      const msns = this._config?.msn
+        ? Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]
+        : [];
+      msns.forEach((m) => params.append("msn", m));
+
       const res = await fetch(`${base}api/calls?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data: CallsResponse = await res.json();
-
       this._calls = appending ? [...this._calls, ...(data.items ?? [])] : (data.items ?? []);
       this._nextCursor = data.next_cursor ?? null;
       this._failCount = 0;
     } catch (e) {
       this._failCount++;
+      const msg = e instanceof Error ? e.message : String(e);
       if (this._failCount >= PhoneLoggerCard.CIRCUIT_MAX_FAILURES) {
         this._circuitOpenUntil = Date.now() + PhoneLoggerCard.CIRCUIT_COOLDOWN_MS;
-        this._error = `${e instanceof Error ? e.message : String(e)} — retrying in 5 min`;
+        this._error = msg + t("retry_suffix");
         this._failCount = 0;
       } else {
-        this._error = e instanceof Error ? e.message : String(e);
+        this._error = msg;
       }
-      // Only reset ingress URL cache if it was discovered via API (not manually configured)
       if (!this._config?.ingress_token) {
         this._ingressUrl = null;
       }
@@ -216,14 +216,11 @@ class PhoneLoggerCard extends LitElement {
   private _groupedCalls(): Array<{ day: string; calls: CallItem[] }> {
     const now = new Date();
     const groups = new Map<string, CallItem[]>();
-
     for (const call of this._calls) {
-      const date = new Date(call.started_at);
-      const key = dayKey(date);
+      const key = dayKey(new Date(call.started_at));
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(call);
     }
-
     return Array.from(groups.entries()).map(([, calls]) => ({
       day: relativeDay(new Date(calls[0].started_at), now),
       calls,
@@ -232,20 +229,21 @@ class PhoneLoggerCard extends LitElement {
 
   protected render() {
     if (!this._config) return nothing;
-
-    const title = this._config.title ?? "Call Log";
     const grouped = this._groupedCalls();
+    const { title } = this._config;
 
     return html`
       <ha-card>
-        <div class="card-header">${title}</div>
+        ${title !== ""
+          ? html`<div class="card-header">${title ?? t("default_title")}</div>`
+          : nothing}
         <div class="card-content">
           ${this._loading
-            ? html`<div class="status">Loading…</div>`
+            ? html`<div class="status">${t("loading")}</div>`
             : this._error
               ? html`<div class="status error">${this._error}</div>`
               : grouped.length === 0
-                ? html`<div class="status">No calls</div>`
+                ? html`<div class="status">${t("no_calls")}</div>`
                 : html`
                     ${grouped.map(
                       (group) => html`
@@ -259,31 +257,31 @@ class PhoneLoggerCard extends LitElement {
                       ? html`
                           <div class="load-more">
                             <button @click=${this._loadMore} ?disabled=${this._loadingMore}>
-                              ${this._loadingMore ? "Loading…" : "Load more"}
+                              ${this._loadingMore ? t("loading_more") : t("load_more")}
                             </button>
                           </div>
                         `
                       : nothing}
                   `}
         </div>
+        ${this._selectedCall ? this._renderModal(this._selectedCall) : nothing}
       </ha-card>
     `;
   }
 
   private _renderRow(call: CallItem) {
     const style = getStatusStyle(call.status, call.direction);
-    const displayName =
-      call.direction === "inbound" ? call.caller_display : call.called_display;
+    const tooltip = statusLabel(call.status, call.direction);
+    const displayName = call.direction === "inbound" ? call.caller_display : call.called_display;
     const device = call.caller_device?.name ?? null;
     const time = new Date(call.started_at).toLocaleTimeString(navigator.language, {
-      hour: "2-digit",
-      minute: "2-digit",
+      hour: "2-digit", minute: "2-digit",
     });
     const secondary = device ? `${time} – ${device}` : time;
 
     return html`
-      <tr>
-        <td class="icon-cell">${mdiIcon(style.icon, style.color)}</td>
+      <tr @click=${() => { this._selectedCall = call; }} class="clickable">
+        <td class="icon-cell">${mdiIcon(style.icon, style.color, tooltip)}</td>
         <td class="name-cell">
           <span class="name">${displayName}</span>
           <span class="secondary">${secondary}</span>
@@ -291,6 +289,52 @@ class PhoneLoggerCard extends LitElement {
         <td class="duration-cell">${formatDuration(call.duration_seconds)}</td>
       </tr>
     `;
+  }
+
+  private _renderModal(call: CallItem) {
+    const style = getStatusStyle(call.status, call.direction);
+    const tooltip = statusLabel(call.status, call.direction);
+    const displayName = call.direction === "inbound" ? call.caller_display : call.called_display;
+    const device = call.caller_device;
+
+    const row = (label: string, value: string) => html`
+      <tr>
+        <td class="modal-label">${label}</td>
+        <td class="modal-value">${value}</td>
+      </tr>
+    `;
+
+    return html`
+      <div class="modal-backdrop" @click=${this._closeModal}>
+        <div class="modal" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="modal-header">
+            ${mdiIcon(style.icon, style.color, tooltip)}
+            <span class="modal-title">${displayName}</span>
+            <button class="modal-close" @click=${this._closeModal}>
+              ${mdiIcon("mdi:close", "currentColor")}
+            </button>
+          </div>
+          <table class="modal-table">
+            ${row(t("modal_caller"), `${call.caller_display} (${call.caller_number})`)}
+            ${row(t("modal_called"), `${call.called_display} (${call.called_number})`)}
+            ${device ? row(t("modal_device"), device.name) : nothing}
+            ${device ? row(t("modal_extension"), device.extension) : nothing}
+            ${row(t("modal_started"), formatTimestamp(call.started_at))}
+            ${row(t("modal_connected"), formatTimestamp(call.connected_at))}
+            ${row(t("modal_finished"), formatTimestamp(call.finished_at))}
+            ${row(t("modal_duration"), formatDuration(call.duration_seconds))}
+            ${row(t("modal_msn"), call.msn || t("modal_unknown"))}
+            ${row(t("modal_trunk"), call.trunk_id || t("modal_unknown"))}
+            ${row(t("modal_line"), String(call.line_id))}
+            ${row(t("modal_internal"), call.is_internal ? t("modal_yes") : t("modal_no"))}
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  private _closeModal() {
+    this._selectedCall = null;
   }
 
   static styles = css`
@@ -327,6 +371,12 @@ class PhoneLoggerCard extends LitElement {
     table {
       width: 100%;
       border-collapse: collapse;
+    }
+    tr.clickable {
+      cursor: pointer;
+    }
+    tr.clickable:hover {
+      background: var(--secondary-background-color);
     }
     tr {
       border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
@@ -381,6 +431,70 @@ class PhoneLoggerCard extends LitElement {
     }
     .load-more button:hover:not(:disabled) {
       background: var(--secondary-background-color);
+    }
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal {
+      background: var(--card-background-color, #fff);
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 420px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .modal-title {
+      flex: 1;
+      font-size: 1.05em;
+      font-weight: 500;
+      color: var(--primary-text-color);
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: var(--secondary-text-color);
+      display: flex;
+      align-items: center;
+    }
+    .modal-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .modal-table tr {
+      border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.06));
+    }
+    .modal-table tr:last-child {
+      border-bottom: none;
+    }
+    .modal-label {
+      font-size: 0.8em;
+      color: var(--secondary-text-color);
+      padding: 5px 12px 5px 0;
+      white-space: nowrap;
+      vertical-align: top;
+    }
+    .modal-value {
+      font-size: 0.85em;
+      color: var(--primary-text-color);
+      padding: 5px 0;
+      word-break: break-all;
     }
   `;
 }
