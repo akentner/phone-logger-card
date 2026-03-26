@@ -1,20 +1,30 @@
 {
   "name": "phone-logger-card",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Home Assistant Lovelace card for phone call logs (HACS)",
   "main": "dist/phone-logger-card.js",
   "scripts": {
     "build": "rollup -c rollup.config.mjs",
     "watch": "rollup -c rollup.config.mjs --watch",
-    "deploy": "rollup -c rollup.config.mjs && scp dist/phone-logger-card.js haos-op3050-1:/config/www/community/phone-logger-card/phone-logger-card.js"
+    "format": "prettier --write .",
+    "deploy": "rollup -c rollup.config.mjs && scp dist/phone-logger-card.js haos-op3050-1:/config/www/community/phone-logger-card/phone-logger-card.js",
+    "start:hass": "docker run --rm -p8123:8123 -v ${PWD}/.hass_dev:/config homeassistant/home-assistant:beta",
+    "start:hass-cmd": "docker run --rm -p8123:8123 -v  %cd%/.hass_dev:/config homeassistant/home-assistant:beta"
   },
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "^15.3.0",
-    "@rollup/plugin-terser": "^0.4.4",
-    "@rollup/plugin-typescript": "^12.1.2",
-    "lit": "^3.2.1",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-terser": "^1.0.0",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "prettier": "^3.8.1",
     "rollup": "^4.34.9",
+    "rollup-plugin-filesize": "^7.0.0",
+    "rollup-plugin-serve": "^3.0.0",
     "tslib": "^2.8.1",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "custom-card-helpers": "^2.0.0",
+    "lit": "^3.3.2"
   }
 }

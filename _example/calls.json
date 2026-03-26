@@ -1,1 +1,50 @@
-{"items":[{"id":"019d21dd-8ec1-7d6d-8f4b-00f813ee1341","connection_id":1,"caller_number":"+496181990135","called_number":"+491783278576","direction":"outbound","status":"answered","caller_device":{"id":"15","extension":"**615","name":"K 22","type":"dect"},"called_device":null,"msn":"+496181990135","trunk_id":"SIP2","line_id":1,"is_internal":false,"started_at":"2026-03-24T22:01:01.377230Z","connected_at":"2026-03-24T22:01:05.895985Z","finished_at":"2026-03-24T22:01:15.025350Z","duration_seconds":9,"caller_display":"HI Homeoffice","called_display":"Alex Handy","created_at":"2026-03-24T22:01:01.377403Z","updated_at":"2026-03-24T22:01:15.027880Z"},{"id":"019d21dc-1b5d-76b9-b7ad-8a0f25dc445f","connection_id":1,"caller_number":"+496181990135","called_number":"+491783278576","direction":"outbound","status":"answered","caller_device":{"id":"15","extension":"**615","name":"K 22","type":"dect"},"called_device":null,"msn":"+496181990135","trunk_id":"SIP2","line_id":1,"is_internal":false,"started_at":"2026-03-24T21:59:26.301160Z","connected_at":"2026-03-24T21:59:29.569244Z","finished_at":"2026-03-24T21:59:32.374868Z","duration_seconds":2,"caller_display":"HI Homeoffice","called_display":"Alex Handy","created_at":"2026-03-24T21:59:26.301324Z","updated_at":"2026-03-24T21:59:32.377080Z"}],"next_cursor":"019d21dc-1b5d-76b9-b7ad-8a0f25dc445f","limit":2}
+{
+  "items": [
+    {
+      "id": "019d21dd-8ec1-7d6d-8f4b-00f813ee1341",
+      "connection_id": 1,
+      "caller_number": "+496181990135",
+      "called_number": "+491783278576",
+      "direction": "outbound",
+      "status": "answered",
+      "caller_device": { "id": "15", "extension": "**615", "name": "K 22", "type": "dect" },
+      "called_device": null,
+      "msn": "+496181990135",
+      "trunk_id": "SIP2",
+      "line_id": 1,
+      "is_internal": false,
+      "started_at": "2026-03-24T22:01:01.377230Z",
+      "connected_at": "2026-03-24T22:01:05.895985Z",
+      "finished_at": "2026-03-24T22:01:15.025350Z",
+      "duration_seconds": 9,
+      "caller_display": "HI Homeoffice",
+      "called_display": "Alex Handy",
+      "created_at": "2026-03-24T22:01:01.377403Z",
+      "updated_at": "2026-03-24T22:01:15.027880Z"
+    },
+    {
+      "id": "019d21dc-1b5d-76b9-b7ad-8a0f25dc445f",
+      "connection_id": 1,
+      "caller_number": "+496181990135",
+      "called_number": "+491783278576",
+      "direction": "outbound",
+      "status": "answered",
+      "caller_device": { "id": "15", "extension": "**615", "name": "K 22", "type": "dect" },
+      "called_device": null,
+      "msn": "+496181990135",
+      "trunk_id": "SIP2",
+      "line_id": 1,
+      "is_internal": false,
+      "started_at": "2026-03-24T21:59:26.301160Z",
+      "connected_at": "2026-03-24T21:59:29.569244Z",
+      "finished_at": "2026-03-24T21:59:32.374868Z",
+      "duration_seconds": 2,
+      "caller_display": "HI Homeoffice",
+      "called_display": "Alex Handy",
+      "created_at": "2026-03-24T21:59:26.301324Z",
+      "updated_at": "2026-03-24T21:59:32.377080Z"
+    }
+  ],
+  "next_cursor": "019d21dc-1b5d-76b9-b7ad-8a0f25dc445f",
+  "limit": 2
+}

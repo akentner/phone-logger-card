@@ -1,5 +1,4 @@
 export interface PhoneLoggerCardConfig {
-  ingress_token?: string;
   addon_slug?: string;
   msn?: string | string[];
   limit?: number;
@@ -18,8 +17,8 @@ export interface CallItem {
   connection_id: number;
   caller_number: string;
   called_number: string;
-  direction: "inbound" | "outbound";
-  status: "answered" | "missed" | "not_reached" | "voicemail" | string;
+  direction: 'inbound' | 'outbound';
+  status: 'answered' | 'missed' | 'not_reached' | 'voicemail' | string;
   caller_device: CallerDevice | null;
   called_device: CallerDevice | null;
   msn: string;
