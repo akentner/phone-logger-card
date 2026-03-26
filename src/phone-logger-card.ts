@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.3';
+const CARD_VERSION = '1.2.0-alpha.4';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
@@ -174,9 +174,15 @@ class PhoneLoggerCard extends LitElement {
       const msns = this._config?.msn ? (Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]) : [];
       msns.forEach((m) => params.append('msn', m));
 
-      const url = `${base}api/calls?${params}`;
-      this._debug(`fetch ${url}`);
-      const res = await fetch(url, { credentials: 'include' });
+      const path = `${base}api/calls?${params}`;
+      this._debug(`signing path: ${path}`);
+      const { path: signedPath } = await (this.hass as any).callWS({
+        type: 'auth/sign_path',
+        path,
+      }) as { path: string };
+      const url = `${location.origin}${signedPath}`;
+      this._debug(`fetch ${url.substring(0, 120)}…`);
+      const res = await fetch(url);
       this._debug(`fetch response: ${res.status} ${res.statusText}`);
       if (!res.ok) {
         const body = await res.text().catch(() => '');
