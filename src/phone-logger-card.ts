@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.1.1';
+const CARD_VERSION = '1.2.0-alpha.1';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
@@ -77,6 +77,7 @@ class PhoneLoggerCard extends LitElement {
   @state() private _loadingMore = false;
   @state() private _error: string | null = null;
   @state() private _selectedCall: CallItem | null = null;
+  @state() private _debugLog: string[] = [];
 
   private get _lang(): string | undefined {
     return this.hass?.language;
@@ -125,16 +126,26 @@ class PhoneLoggerCard extends LitElement {
     }
   }
 
+  private _debug(msg: string) {
+    const ts = new Date().toLocaleTimeString();
+    this._debugLog = [...this._debugLog.slice(-19), `[${ts}] ${msg}`];
+  }
+
   private async _resolveIngressUrl(): Promise<string> {
-    if (this._ingressUrl) return this._ingressUrl;
+    if (this._ingressUrl) {
+      this._debug(`ingress cached: ${this._ingressUrl}`);
+      return this._ingressUrl;
+    }
 
     const slug = this._config?.addon_slug ?? DEFAULT_ADDON_SLUG;
-    const info = await (this.hass as any).callWS({
+    this._debug(`callWS supervisor/api addons/${slug}/info`);
+    const info = (await (this.hass as any).callWS({
       type: 'supervisor/api',
       endpoint: `/addons/${slug}/info`,
       method: 'get',
-    }) as AddonInfo;
+    })) as AddonInfo;
     const base = info.ingress_url.endsWith('/') ? info.ingress_url : `${info.ingress_url}/`;
+    this._debug(`ingress resolved: ${base}`);
     this._ingressUrl = base;
     return base;
   }
@@ -152,6 +163,7 @@ class PhoneLoggerCard extends LitElement {
     }
 
     try {
+      this._debug(`fetchCalls start (cursor=${cursor ?? 'none'}, fail=${this._failCount})`);
       const base = await this._resolveIngressUrl();
 
       const limit = this._config?.limit ?? DEFAULT_LIMIT;
@@ -162,10 +174,17 @@ class PhoneLoggerCard extends LitElement {
       const msns = this._config?.msn ? (Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]) : [];
       msns.forEach((m) => params.append('msn', m));
 
-      const res = await fetch(`${base}api/calls?${params}`, { credentials: 'include' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const url = `${base}api/calls?${params}`;
+      this._debug(`fetch ${url}`);
+      const res = await fetch(url, { credentials: 'include' });
+      this._debug(`fetch response: ${res.status} ${res.statusText}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${res.statusText} — ${body.substring(0, 200)}`);
+      }
 
       const data: CallsResponse = await res.json();
+      this._debug(`got ${data.items?.length ?? 0} calls, cursor=${data.next_cursor ?? 'none'}`);
       this._calls = appending ? [...this._calls, ...(data.items ?? [])] : (data.items ?? []);
       this._nextCursor = data.next_cursor ?? null;
       this._failCount = 0;
@@ -177,6 +196,7 @@ class PhoneLoggerCard extends LitElement {
           : typeof e === 'object' && e !== null && 'message' in e
             ? String((e as { message: unknown }).message)
             : JSON.stringify(e);
+      this._debug(`ERROR #${this._failCount}: ${msg}`);
       if (this._failCount >= PhoneLoggerCard.CIRCUIT_MAX_FAILURES) {
         this._circuitOpenUntil = Date.now() + PhoneLoggerCard.CIRCUIT_COOLDOWN_MS;
         this._error = msg + t('retry_suffix', this._lang);
@@ -245,6 +265,14 @@ class PhoneLoggerCard extends LitElement {
                   `}
         </div>
         ${this._selectedCall ? this._renderModal(this._selectedCall) : nothing}
+        ${this._debugLog.length
+          ? html`
+              <div class="debug">
+                <div class="debug-header">Debug (v${CARD_VERSION})</div>
+                ${this._debugLog.map((line) => html`<div class="debug-line">${line}</div>`)}
+              </div>
+            `
+          : nothing}
       </ha-card>
     `;
   }
@@ -479,6 +507,26 @@ class PhoneLoggerCard extends LitElement {
       font-size: 0.85em;
       color: var(--primary-text-color);
       padding: 5px 0;
+      word-break: break-all;
+    }
+    /* Debug panel */
+    .debug {
+      margin-top: 12px;
+      padding: 8px 16px;
+      border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.1));
+    }
+    .debug-header {
+      font-size: 0.7em;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--secondary-text-color);
+      margin-bottom: 4px;
+    }
+    .debug-line {
+      font-size: 0.7em;
+      font-family: monospace;
+      color: var(--secondary-text-color);
+      line-height: 1.4;
       word-break: break-all;
     }
   `;
