@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.1.0';
+const CARD_VERSION = '1.1.1';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
