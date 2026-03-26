@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.4';
+const CARD_VERSION = '1.2.0-alpha.5';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
@@ -176,12 +176,16 @@ class PhoneLoggerCard extends LitElement {
 
       const path = `${base}api/calls?${params}`;
       this._debug(`signing path: ${path}`);
-      const { path: signedPath } = await (this.hass as any).callWS({
+      const signResult = await (this.hass as any).callWS({
         type: 'auth/sign_path',
         path,
-      }) as { path: string };
+      });
+      this._debug(`sign result keys: ${Object.keys(signResult || {})}`);
+      const signedPath = signResult?.path ?? path;
+      this._debug(`signed path: ${signedPath.substring(0, 200)}`);
+      const hasAuthSig = signedPath.includes('authSig');
+      this._debug(`has authSig: ${hasAuthSig}`);
       const url = `${location.origin}${signedPath}`;
-      this._debug(`fetch ${url.substring(0, 120)}…`);
       const res = await fetch(url);
       this._debug(`fetch response: ${res.status} ${res.statusText}`);
       if (!res.ok) {
@@ -360,7 +364,7 @@ class PhoneLoggerCard extends LitElement {
   }
 
   private async _copyDebug() {
-    const text = this._debugLog.join('\n');
+    const text = `phone-logger-card v${CARD_VERSION}\n${this._debugLog.join('\n')}`;
     try {
       await navigator.clipboard.writeText(text);
     } catch {
