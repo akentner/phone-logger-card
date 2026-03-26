@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.5';
+const CARD_VERSION = '1.2.0-alpha.6';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
@@ -174,19 +174,17 @@ class PhoneLoggerCard extends LitElement {
       const msns = this._config?.msn ? (Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]) : [];
       msns.forEach((m) => params.append('msn', m));
 
-      const path = `${base}api/calls?${params}`;
-      this._debug(`signing path: ${path}`);
-      const signResult = await (this.hass as any).callWS({
-        type: 'auth/sign_path',
-        path,
+      // Create ingress session (sets ingress_session cookie)
+      this._debug('creating ingress session via fetchWithAuth');
+      const sessionRes = await (this.hass as any).fetchWithAuth('/api/hassio/ingress/session', {
+        method: 'POST',
+        credentials: 'include',
       });
-      this._debug(`sign result keys: ${Object.keys(signResult || {})}`);
-      const signedPath = signResult?.path ?? path;
-      this._debug(`signed path: ${signedPath.substring(0, 200)}`);
-      const hasAuthSig = signedPath.includes('authSig');
-      this._debug(`has authSig: ${hasAuthSig}`);
-      const url = `${location.origin}${signedPath}`;
-      const res = await fetch(url);
+      this._debug(`session response: ${sessionRes.status}`);
+
+      const url = `${base}api/calls?${params}`;
+      this._debug(`fetch ${url}`);
+      const res = await fetch(url, { credentials: 'include' });
       this._debug(`fetch response: ${res.status} ${res.statusText}`);
       if (!res.ok) {
         const body = await res.text().catch(() => '');
