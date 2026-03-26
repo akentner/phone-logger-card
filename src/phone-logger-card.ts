@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.6';
+const CARD_VERSION = '1.2.0-alpha.7';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
@@ -174,13 +174,19 @@ class PhoneLoggerCard extends LitElement {
       const msns = this._config?.msn ? (Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]) : [];
       msns.forEach((m) => params.append('msn', m));
 
-      // Create ingress session (sets ingress_session cookie)
-      this._debug('creating ingress session via fetchWithAuth');
-      const sessionRes = await (this.hass as any).fetchWithAuth('/api/hassio/ingress/session', {
-        method: 'POST',
-        credentials: 'include',
+      // Create ingress session via WS and set cookie manually
+      this._debug('creating ingress session via callWS');
+      const sessionResult = await (this.hass as any).callWS({
+        type: 'supervisor/api',
+        endpoint: '/ingress/session',
+        method: 'post',
       });
-      this._debug(`session response: ${sessionRes.status}`);
+      const session = sessionResult?.session;
+      this._debug(`session token: ${session ? session.substring(0, 20) + '…' : 'MISSING'}`);
+      if (session) {
+        document.cookie = `ingress_session=${session}; path=/api/hassio_ingress/; SameSite=Strict`;
+        this._debug('cookie set');
+      }
 
       const url = `${base}api/calls?${params}`;
       this._debug(`fetch ${url}`);
