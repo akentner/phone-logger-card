@@ -5,7 +5,7 @@ import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from '
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.2';
+const CARD_VERSION = '1.2.0-alpha.3';
 const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
@@ -268,8 +268,11 @@ class PhoneLoggerCard extends LitElement {
         ${this._debugLog.length
           ? html`
               <div class="debug">
-                <div class="debug-header">Debug (v${CARD_VERSION})</div>
-                ${this._debugLog.map((line) => html`<div class="debug-line">${line}</div>`)}
+                <div class="debug-header">
+                  Debug (v${CARD_VERSION})
+                  <button class="debug-copy" @click=${this._copyDebug}>Copy</button>
+                </div>
+                <pre class="debug-pre">${this._debugLog.join('\n')}</pre>
               </div>
             `
           : nothing}
@@ -348,6 +351,23 @@ class PhoneLoggerCard extends LitElement {
 
   private _closeModal() {
     this._selectedCall = null;
+  }
+
+  private async _copyDebug() {
+    const text = this._debugLog.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback for contexts where clipboard API is blocked
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
   }
 
   static styles = css`
@@ -521,13 +541,30 @@ class PhoneLoggerCard extends LitElement {
       text-transform: uppercase;
       color: var(--secondary-text-color);
       margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-    .debug-line {
+    .debug-copy {
+      background: none;
+      border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
+      border-radius: 4px;
+      color: var(--primary-color);
+      cursor: pointer;
+      font-size: 1em;
+      padding: 2px 8px;
+      text-transform: none;
+    }
+    .debug-pre {
       font-size: 0.7em;
       font-family: monospace;
       color: var(--secondary-text-color);
       line-height: 1.4;
       word-break: break-all;
+      white-space: pre-wrap;
+      margin: 0;
+      user-select: text;
+      -webkit-user-select: text;
     }
   `;
 }
