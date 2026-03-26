@@ -6,7 +6,7 @@ import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
 const CARD_VERSION = '1.1.0';
-const DEFAULT_ADDON_SLUG = '72a005f5-phone-logger';
+const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
 const DEFAULT_LIMIT = 20;
 
 interface StatusStyle {
@@ -129,14 +129,14 @@ class PhoneLoggerCard extends LitElement {
     if (this._ingressUrl) return this._ingressUrl;
 
     const slug = this._config?.addon_slug ?? DEFAULT_ADDON_SLUG;
-    const info = await this.hass!.callApi<AddonInfo>('GET', `hassio/addons/${slug}/info`);
+    const info = await (this.hass as any).callWS({
+      type: 'supervisor/api',
+      endpoint: `/addons/${slug}/info`,
+      method: 'get',
+    }) as AddonInfo;
     const base = info.ingress_url.endsWith('/') ? info.ingress_url : `${info.ingress_url}/`;
     this._ingressUrl = base;
     return base;
-  }
-
-  private async _validateIngressSession(): Promise<void> {
-    await this.hass!.callApi('POST', 'hassio_ingress/validate_session');
   }
 
   private async _fetchCalls(cursor?: string) {
@@ -152,7 +152,6 @@ class PhoneLoggerCard extends LitElement {
     }
 
     try {
-      await this._validateIngressSession();
       const base = await this._resolveIngressUrl();
 
       const limit = this._config?.limit ?? DEFAULT_LIMIT;
@@ -172,7 +171,12 @@ class PhoneLoggerCard extends LitElement {
       this._failCount = 0;
     } catch (e) {
       this._failCount++;
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'object' && e !== null && 'message' in e
+            ? String((e as { message: unknown }).message)
+            : JSON.stringify(e);
       if (this._failCount >= PhoneLoggerCard.CIRCUIT_MAX_FAILURES) {
         this._circuitOpenUntil = Date.now() + PhoneLoggerCard.CIRCUIT_COOLDOWN_MS;
         this._error = msg + t('retry_suffix', this._lang);
