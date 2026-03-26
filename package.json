@@ -1,6 +1,6 @@
 {
   "name": "phone-logger-card",
-  "version": "1.2.0-alpha.8",
+  "version": "2.0.0",
   "description": "Home Assistant Lovelace card for phone call logs (HACS)",
   "main": "dist/phone-logger-card.js",
   "scripts": {

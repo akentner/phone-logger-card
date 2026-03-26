@@ -1,6 +1,6 @@
 # Phone Logger Card
 
-A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card that displays phone call logs from the [Phone Logger](https://github.com/akentner/phone-logger) add-on.
+A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card that displays phone call logs from the [Phone Logger](https://github.com/akentner/ha-custom-component-phone-logger) custom component.
 
 ![HACS Badge](https://img.shields.io/badge/HACS-Custom-orange.svg)
 
@@ -14,6 +14,10 @@ A custom [Home Assistant](https://www.home-assistant.io/) Lovelace card that dis
 - Circuit breaker to prevent error spam on repeated failures
 - i18n support (German and English), based on your Home Assistant language setting
 - Works locally and remotely (Nabu Casa / Companion App)
+
+## Prerequisites
+
+This card requires the [Phone Logger custom component](https://github.com/akentner/ha-custom-component-phone-logger) to be installed and configured in Home Assistant. The card communicates via Home Assistant's WebSocket API — no ingress or HTTP fetching needed.
 
 ## Installation
 
@@ -44,12 +48,11 @@ type: custom:phone-logger-card
 
 ### Options
 
-| Option       | Type               | Default                       | Description                       |
-| ------------ | ------------------ | ----------------------------- | --------------------------------- |
-| `title`      | string             | `"Anrufliste"` / `"Call Log"` | Card title. Set to `""` to hide.  |
-| `addon_slug` | string             | `72a005f5-phone-logger`       | Add-on slug for ingress discovery |
-| `msn`        | string \| string[] | —                             | Filter calls by MSN number(s)     |
-| `limit`      | number             | `20`                          | Number of calls per page          |
+| Option  | Type               | Default                       | Description                      |
+| ------- | ------------------ | ----------------------------- | -------------------------------- |
+| `title` | string             | `"Anrufliste"` / `"Call Log"` | Card title. Set to `""` to hide. |
+| `msn`   | string \| string[] | —                             | Filter calls by MSN number(s)    |
+| `limit` | number             | `20`                          | Number of calls per page         |
 
 ### Examples
 
@@ -65,8 +68,8 @@ type: custom:phone-logger-card
 type: custom:phone-logger-card
 title: Office Calls
 msn:
-  - '+49301234567'
-  - '+49301234568'
+  - "+49301234567"
+  - "+49301234568"
 limit: 50
 ```
 
@@ -74,12 +77,8 @@ limit: 50
 
 ```yaml
 type: custom:phone-logger-card
-title: ''
+title: ""
 ```
-
-## Prerequisites
-
-This card requires the [Phone Logger](https://github.com/akentner/phone-logger) add-on to be installed and running in Home Assistant. The card communicates with the add-on's REST API through Home Assistant's ingress proxy.
 
 ## Development
 

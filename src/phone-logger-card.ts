@@ -5,7 +5,7 @@ import type { CallItem, CallsResponse, PhoneLoggerCardConfig } from './types.js'
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.8';
+const CARD_VERSION = '2.0.0';
 const DEFAULT_LIMIT = 20;
 
 interface StatusStyle {
@@ -76,7 +76,6 @@ class PhoneLoggerCard extends LitElement {
   @state() private _loadingMore = false;
   @state() private _error: string | null = null;
   @state() private _selectedCall: CallItem | null = null;
-  @state() private _debugLog: string[] = [];
 
   private get _lang(): string | undefined {
     return this.hass?.language;
@@ -123,11 +122,6 @@ class PhoneLoggerCard extends LitElement {
     }
   }
 
-  private _debug(msg: string) {
-    const ts = new Date().toLocaleTimeString();
-    this._debugLog = [...this._debugLog.slice(-19), `[${ts}] ${msg}`];
-  }
-
   private async _fetchCalls(cursor?: string) {
     if (!this.hass) return;
     if (Date.now() < this._circuitOpenUntil) return;
@@ -144,15 +138,12 @@ class PhoneLoggerCard extends LitElement {
       const limit = this._config?.limit ?? DEFAULT_LIMIT;
       const msns = this._config?.msn ? (Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]) : [];
 
-      this._debug(`callWS phone_logger/calls (cursor=${cursor ?? 'none'}, limit=${limit})`);
       const data: CallsResponse = await (this.hass as any).callWS({
         type: 'phone_logger/calls',
         limit,
         ...(cursor ? { cursor } : {}),
         ...(msns.length ? { msn: msns } : {}),
       });
-      this._debug(`got ${data.items?.length ?? 0} calls, cursor=${data.next_cursor ?? 'none'}`);
-
       this._calls = appending ? [...this._calls, ...(data.items ?? [])] : (data.items ?? []);
       this._nextCursor = data.next_cursor ?? null;
       this._failCount = 0;
@@ -164,7 +155,6 @@ class PhoneLoggerCard extends LitElement {
           : typeof e === 'object' && e !== null && 'message' in e
             ? String((e as { message: unknown }).message)
             : JSON.stringify(e);
-      this._debug(`ERROR #${this._failCount}: ${msg}`);
       if (this._failCount >= PhoneLoggerCard.CIRCUIT_MAX_FAILURES) {
         this._circuitOpenUntil = Date.now() + PhoneLoggerCard.CIRCUIT_COOLDOWN_MS;
         this._error = msg + t('retry_suffix', this._lang);
@@ -232,17 +222,6 @@ class PhoneLoggerCard extends LitElement {
                   `}
         </div>
         ${this._selectedCall ? this._renderModal(this._selectedCall) : nothing}
-        ${this._debugLog.length
-          ? html`
-              <div class="debug">
-                <div class="debug-header">
-                  Debug (v${CARD_VERSION})
-                  <button class="debug-copy" @click=${this._copyDebug}>Copy</button>
-                </div>
-                <pre class="debug-pre">${this._debugLog.join('\n')}</pre>
-              </div>
-            `
-          : nothing}
       </ha-card>
     `;
   }
@@ -318,23 +297,6 @@ class PhoneLoggerCard extends LitElement {
 
   private _closeModal() {
     this._selectedCall = null;
-  }
-
-  private async _copyDebug() {
-    const text = `phone-logger-card v${CARD_VERSION}\n${this._debugLog.join('\n')}`;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // Fallback for contexts where clipboard API is blocked
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    }
   }
 
   static styles = css`
@@ -496,43 +458,6 @@ class PhoneLoggerCard extends LitElement {
       padding: 5px 0;
       word-break: break-all;
     }
-    /* Debug panel */
-    .debug {
-      margin-top: 12px;
-      padding: 8px 16px;
-      border-top: 1px solid var(--divider-color, rgba(0, 0, 0, 0.1));
-    }
-    .debug-header {
-      font-size: 0.7em;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: var(--secondary-text-color);
-      margin-bottom: 4px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .debug-copy {
-      background: none;
-      border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.2));
-      border-radius: 4px;
-      color: var(--primary-color);
-      cursor: pointer;
-      font-size: 1em;
-      padding: 2px 8px;
-      text-transform: none;
-    }
-    .debug-pre {
-      font-size: 0.7em;
-      font-family: monospace;
-      color: var(--secondary-text-color);
-      line-height: 1.4;
-      word-break: break-all;
-      white-space: pre-wrap;
-      margin: 0;
-      user-select: text;
-      -webkit-user-select: text;
-    }
   `;
 }
 
@@ -546,7 +471,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'phone-logger-card',
   name: 'Phone Logger Card',
-  description: 'Displays phone call history from a REST endpoint',
+  description: 'Displays phone call history via Phone Logger custom component',
   preview: false,
   documentationURL: 'https://github.com/akentner/phone-logger-card',
 });

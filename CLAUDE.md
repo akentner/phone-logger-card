@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A custom Home Assistant Lovelace card (HACS-compatible) that displays phone call logs from the **phone-logger** add-on. Built with Lit and TypeScript, bundled into a single IIFE via Rollup.
+A custom Home Assistant Lovelace card (HACS-compatible) that displays phone call logs from the **phone_logger** custom component. Built with Lit and TypeScript, bundled into a single IIFE via Rollup.
 
 ## Build & Development
 
@@ -21,16 +21,16 @@ No test framework is configured. No linter beyond Prettier.
 
 Single custom element `<phone-logger-card>` registered in the browser. The entire card is one LitElement class in `src/phone-logger-card.ts`.
 
-- **`src/phone-logger-card.ts`** — Main card: fetches call data from the phone-logger add-on's REST API via HA ingress, renders grouped call list + detail modal. Polls every 60s with a circuit breaker (3 failures → 5 min cooldown).
-- **`src/types.ts`** — TypeScript interfaces for card config, API responses (`CallItem`, `CallsResponse`, `AddonInfo`).
-- **`src/i18n.ts`** — Hardcoded i18n (German/English), auto-detected from `navigator.language`.
+- **`src/phone-logger-card.ts`** — Main card: fetches call data via `hass.callWS({type: 'phone_logger/calls'})`, renders grouped call list + detail modal. Polls every 60s with a circuit breaker (3 failures → 5 min cooldown).
+- **`src/types.ts`** — TypeScript interfaces for card config, API responses (`CallItem`, `CallsResponse`).
+- **`src/i18n.ts`** — Hardcoded i18n (German/English), detected from `hass.language`.
 - **`src/mdi.ts`** — Inline MDI SVG icon paths (no external icon dependency).
 
-The card communicates with the phone-logger add-on through HA's ingress proxy. Ingress URL is resolved either from a configured `ingress_token` or by calling the Supervisor API with the add-on slug.
+The card communicates with the phone_logger custom component via Home Assistant's WebSocket API. No ingress, no HTTP fetching, no cookies — works on all platforms including mobile and Nabu Casa.
 
 ## Card Configuration Options
 
-Defined in `PhoneLoggerCardConfig`: `ingress_token`, `addon_slug`, `msn` (string or array), `limit`, `title`.
+Defined in `PhoneLoggerCardConfig`: `msn` (string or array), `limit`, `title`.
 
 ## Key Conventions
 
