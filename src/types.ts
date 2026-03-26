@@ -1,5 +1,4 @@
 export interface PhoneLoggerCardConfig {
-  addon_slug?: string;
   msn?: string | string[];
   limit?: number;
   title?: string;
@@ -41,7 +40,3 @@ export interface CallsResponse {
   limit: number;
 }
 
-export interface AddonInfo {
-  ingress_url: string;
-  [key: string]: unknown;
-}

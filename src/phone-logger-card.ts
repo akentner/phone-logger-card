@@ -1,12 +1,11 @@
 import { css, html, LitElement, nothing } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
-import type { AddonInfo, CallItem, CallsResponse, PhoneLoggerCardConfig } from './types.js';
+import type { CallItem, CallsResponse, PhoneLoggerCardConfig } from './types.js';
 import { statusLabel, t } from './i18n.js';
 import { icon } from './mdi';
 
-const CARD_VERSION = '1.2.0-alpha.7';
-const DEFAULT_ADDON_SLUG = '72a005f5_phone-logger';
+const CARD_VERSION = '1.2.0-alpha.8';
 const DEFAULT_LIMIT = 20;
 
 interface StatusStyle {
@@ -82,7 +81,6 @@ class PhoneLoggerCard extends LitElement {
   private get _lang(): string | undefined {
     return this.hass?.language;
   }
-  private _ingressUrl: string | null = null;
   private _pollTimer?: ReturnType<typeof setInterval>;
   private _failCount = 0;
   private _circuitOpenUntil = 0;
@@ -95,7 +93,6 @@ class PhoneLoggerCard extends LitElement {
 
   setConfig(config: PhoneLoggerCardConfig) {
     this._config = config;
-    this._ingressUrl = null;
   }
 
   connectedCallback() {
@@ -131,25 +128,6 @@ class PhoneLoggerCard extends LitElement {
     this._debugLog = [...this._debugLog.slice(-19), `[${ts}] ${msg}`];
   }
 
-  private async _resolveIngressUrl(): Promise<string> {
-    if (this._ingressUrl) {
-      this._debug(`ingress cached: ${this._ingressUrl}`);
-      return this._ingressUrl;
-    }
-
-    const slug = this._config?.addon_slug ?? DEFAULT_ADDON_SLUG;
-    this._debug(`callWS supervisor/api addons/${slug}/info`);
-    const info = (await (this.hass as any).callWS({
-      type: 'supervisor/api',
-      endpoint: `/addons/${slug}/info`,
-      method: 'get',
-    })) as AddonInfo;
-    const base = info.ingress_url.endsWith('/') ? info.ingress_url : `${info.ingress_url}/`;
-    this._debug(`ingress resolved: ${base}`);
-    this._ingressUrl = base;
-    return base;
-  }
-
   private async _fetchCalls(cursor?: string) {
     if (!this.hass) return;
     if (Date.now() < this._circuitOpenUntil) return;
@@ -163,42 +141,18 @@ class PhoneLoggerCard extends LitElement {
     }
 
     try {
-      this._debug(`fetchCalls start (cursor=${cursor ?? 'none'}, fail=${this._failCount})`);
-      const base = await this._resolveIngressUrl();
-
       const limit = this._config?.limit ?? DEFAULT_LIMIT;
-      const params = new URLSearchParams({ limit: String(limit) });
-      if (cursor) params.set('cursor', cursor);
-
-      // MSN filter — API supports multiple msn params
       const msns = this._config?.msn ? (Array.isArray(this._config.msn) ? this._config.msn : [this._config.msn]) : [];
-      msns.forEach((m) => params.append('msn', m));
 
-      // Create ingress session via WS and set cookie manually
-      this._debug('creating ingress session via callWS');
-      const sessionResult = await (this.hass as any).callWS({
-        type: 'supervisor/api',
-        endpoint: '/ingress/session',
-        method: 'post',
+      this._debug(`callWS phone_logger/calls (cursor=${cursor ?? 'none'}, limit=${limit})`);
+      const data: CallsResponse = await (this.hass as any).callWS({
+        type: 'phone_logger/calls',
+        limit,
+        ...(cursor ? { cursor } : {}),
+        ...(msns.length ? { msn: msns } : {}),
       });
-      const session = sessionResult?.session;
-      this._debug(`session token: ${session ? session.substring(0, 20) + '…' : 'MISSING'}`);
-      if (session) {
-        document.cookie = `ingress_session=${session}; path=/api/hassio_ingress/; SameSite=Strict`;
-        this._debug('cookie set');
-      }
-
-      const url = `${base}api/calls?${params}`;
-      this._debug(`fetch ${url}`);
-      const res = await fetch(url, { credentials: 'include' });
-      this._debug(`fetch response: ${res.status} ${res.statusText}`);
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status} ${res.statusText} — ${body.substring(0, 200)}`);
-      }
-
-      const data: CallsResponse = await res.json();
       this._debug(`got ${data.items?.length ?? 0} calls, cursor=${data.next_cursor ?? 'none'}`);
+
       this._calls = appending ? [...this._calls, ...(data.items ?? [])] : (data.items ?? []);
       this._nextCursor = data.next_cursor ?? null;
       this._failCount = 0;
@@ -218,7 +172,6 @@ class PhoneLoggerCard extends LitElement {
       } else {
         this._error = msg;
       }
-      this._ingressUrl = null;
     } finally {
       this._loading = false;
       this._loadingMore = false;
