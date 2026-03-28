@@ -4,7 +4,7 @@ import type { HomeAssistant } from 'custom-card-helpers';
 import type { CallItem, CallsResponse, PhoneLoggerCardConfig } from './types.js';
 import { statusLabel, t } from './i18n.js';
 
-const CARD_VERSION = '2.1.0';
+const CARD_VERSION = '2.2.0';
 const DEFAULT_LIMIT = 20;
 
 interface StatusStyle {
@@ -270,33 +270,33 @@ class PhoneLoggerCard extends LitElement {
     `;
 
     return html`
-      <div class="modal-backdrop" @click=${this._closeModal}>
-        <div class="modal" @click=${(e: Event) => e.stopPropagation()}>
-          <div class="modal-header">
-            <ha-icon icon=${style.icon} style="color:${style.color}" title=${tooltip}></ha-icon>
-            <span class="modal-title">${displayName}</span>
-            <button class="modal-close" @click=${this._closeModal}><ha-icon icon="mdi:close"></ha-icon></button>
-          </div>
-          <table class="modal-table">
-            <tr>
-              <td class="modal-label">${t('modal_status', lang)}</td>
-              <td class="modal-value" style="color:${style.color}">${tooltip}</td>
-            </tr>
-            ${row(t('modal_caller', lang), `${call.caller_display} (${call.caller_number})`)}
-            ${row(t('modal_called', lang), `${call.called_display} (${call.called_number})`)}
-            ${device ? row(t('modal_device', lang), device.name) : nothing}
-            ${device ? row(t('modal_extension', lang), device.extension) : nothing}
-            ${row(t('modal_started', lang), formatTimestamp(call.started_at, lang))}
-            ${row(t('modal_connected', lang), formatTimestamp(call.connected_at, lang))}
-            ${row(t('modal_finished', lang), formatTimestamp(call.finished_at, lang))}
-            ${row(t('modal_duration', lang), formatDuration(call.duration_seconds))}
-            ${row(t('modal_msn', lang), call.msn || t('modal_unknown', lang))}
-            ${row(t('modal_trunk', lang), call.trunk_id || t('modal_unknown', lang))}
-            ${row(t('modal_line', lang), String(call.line_id))}
-            ${row(t('modal_internal', lang), call.is_internal ? t('modal_yes', lang) : t('modal_no', lang))}
-          </table>
-        </div>
-      </div>
+      <ha-dialog .open=${true} @closed=${this._closeModal} .heading=${displayName}>
+        <ha-dialog-header slot="heading">
+          <ha-icon-button slot="navigationIcon" dialogAction="cancel">
+            <ha-icon icon="mdi:close"></ha-icon>
+          </ha-icon-button>
+          <span slot="title">${displayName}</span>
+          <ha-icon slot="actionItems" icon=${style.icon} style="color:${style.color}" title=${tooltip}></ha-icon>
+        </ha-dialog-header>
+        <table class="modal-table">
+          <tr>
+            <td class="modal-label">${t('modal_status', lang)}</td>
+            <td class="modal-value" style="color:${style.color}">${tooltip}</td>
+          </tr>
+          ${row(t('modal_caller', lang), `${call.caller_display} (${call.caller_number})`)}
+          ${row(t('modal_called', lang), `${call.called_display} (${call.called_number})`)}
+          ${device ? row(t('modal_device', lang), device.name) : nothing}
+          ${device ? row(t('modal_extension', lang), device.extension) : nothing}
+          ${row(t('modal_started', lang), formatTimestamp(call.started_at, lang))}
+          ${row(t('modal_connected', lang), formatTimestamp(call.connected_at, lang))}
+          ${row(t('modal_finished', lang), formatTimestamp(call.finished_at, lang))}
+          ${row(t('modal_duration', lang), formatDuration(call.duration_seconds))}
+          ${row(t('modal_msn', lang), call.msn || t('modal_unknown', lang))}
+          ${row(t('modal_trunk', lang), call.trunk_id || t('modal_unknown', lang))}
+          ${row(t('modal_line', lang), String(call.line_id))}
+          ${row(t('modal_internal', lang), call.is_internal ? t('modal_yes', lang) : t('modal_no', lang))}
+        </table>
+      </ha-dialog>
     `;
   }
 
@@ -401,46 +401,6 @@ class PhoneLoggerCard extends LitElement {
       background: var(--secondary-background-color);
     }
     /* Modal */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .modal {
-      background: var(--card-background-color, #fff);
-      border-radius: 8px;
-      padding: 20px;
-      max-width: 420px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .modal-title {
-      flex: 1;
-      font-size: 1.05em;
-      font-weight: 500;
-      color: var(--primary-text-color);
-    }
-    .modal-close {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 4px;
-      color: var(--secondary-text-color);
-      display: flex;
-      align-items: center;
-    }
     .modal-table {
       width: 100%;
       border-collapse: collapse;
