@@ -3,9 +3,8 @@ import { property, state } from 'lit/decorators.js';
 import type { HomeAssistant } from 'custom-card-helpers';
 import type { CallItem, CallsResponse, PhoneLoggerCardConfig } from './types.js';
 import { statusLabel, t } from './i18n.js';
-import { icon } from './mdi';
 
-const CARD_VERSION = '2.0.0';
+const CARD_VERSION = '2.1.0';
 const DEFAULT_LIMIT = 20;
 
 interface StatusStyle {
@@ -19,8 +18,8 @@ function getStatusStyle(status: string, direction: string): StatusStyle {
       ? { icon: 'mdi:phone-incoming', color: '#3092dc' }
       : { icon: 'mdi:phone-outgoing', color: '#8bbf68' };
   }
-  if (status === 'missed') return { icon: 'mdi:phone-remove', color: '#e45f3b' };
-  if (status === 'not_reached') return { icon: 'mdi:phone-remove', color: '#8bbf68' };
+  if (status === 'missed') return { icon: 'mdi:phone-missed', color: '#e45f3b' };
+  if (status === 'not_reached') return { icon: 'mdi:phone-off', color: '#e45f3b' };
   if (status === 'voicemail') return { icon: 'mdi:phone-message', color: '#e45f3b' };
   return { icon: 'mdi:phone-hangup', color: 'var(--secondary-text-color, grey)' };
 }
@@ -244,7 +243,9 @@ class PhoneLoggerCard extends LitElement {
         }}
         class="clickable"
       >
-        <td class="icon-cell">${icon(style.icon, style.color, tooltip)}</td>
+        <td class="icon-cell">
+          <ha-icon icon=${style.icon} style="color:${style.color}" title=${tooltip}></ha-icon>
+        </td>
         <td class="name-cell">
           <span class="name">${displayName}</span>
           <span class="secondary">${secondary}</span>
@@ -272,11 +273,15 @@ class PhoneLoggerCard extends LitElement {
       <div class="modal-backdrop" @click=${this._closeModal}>
         <div class="modal" @click=${(e: Event) => e.stopPropagation()}>
           <div class="modal-header">
-            ${icon(style.icon, style.color, tooltip)}
+            <ha-icon icon=${style.icon} style="color:${style.color}" title=${tooltip}></ha-icon>
             <span class="modal-title">${displayName}</span>
-            <button class="modal-close" @click=${this._closeModal}>${icon('mdi:close', 'currentColor')}</button>
+            <button class="modal-close" @click=${this._closeModal}><ha-icon icon="mdi:close"></ha-icon></button>
           </div>
           <table class="modal-table">
+            <tr>
+              <td class="modal-label">${t('modal_status', lang)}</td>
+              <td class="modal-value" style="color:${style.color}">${tooltip}</td>
+            </tr>
             ${row(t('modal_caller', lang), `${call.caller_display} (${call.caller_number})`)}
             ${row(t('modal_called', lang), `${call.called_display} (${call.called_number})`)}
             ${device ? row(t('modal_device', lang), device.name) : nothing}
@@ -353,6 +358,7 @@ class PhoneLoggerCard extends LitElement {
     .icon-cell {
       width: 28px;
       padding-right: 8px;
+      --mdc-icon-size: 22px;
     }
     .name-cell {
       display: flex;

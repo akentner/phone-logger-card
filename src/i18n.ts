@@ -19,6 +19,7 @@ const translations: Record<Lang, Record<string, string>> = {
     status_voicemail: 'Mailbox',
     status_default: 'Anruf',
     // Modal
+    modal_status: 'Status',
     modal_caller: 'Anrufer',
     modal_called: 'Angerufen',
     modal_device: 'Endgerät',
@@ -51,6 +52,7 @@ const translations: Record<Lang, Record<string, string>> = {
     status_not_reached: 'Not reached',
     status_voicemail: 'Voicemail',
     status_default: 'Call',
+    modal_status: 'Status',
     modal_caller: 'Caller',
     modal_called: 'Called',
     modal_device: 'Device',
